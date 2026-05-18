@@ -1,6 +1,9 @@
 cat > saglik-takip/saglik-takip.html << 'EOF'
 <!DOCTYPE html>
 <html lang="tr">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#10b981">
+<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js');</script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
