@@ -1,0 +1,196 @@
+cat > saglik-takip/saglik-takip.html << 'EOF'
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💊 Sağlık Takip</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f9fafb; }
+        .container { min-height: 100vh; padding-bottom: 20px; }
+        .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 20px; text-align: center; }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { font-size: 14px; opacity: 0.9; margin-bottom: 12px; }
+        .bildirim-btn { background-color: rgba(255,255,255,0.3); color: white; border: 1px solid rgba(255,255,255,0.5); padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; margin-top: 10px; }
+        .bildirim-aktif { color: white; font-size: 14px; margin-top: 10px; opacity: 0.9; }
+        .tab-bar { display: flex; gap: 10px; padding: 15px; background-color: white; border-bottom: 1px solid #e5e7eb; }
+        .tab-button { flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.3s ease; background-color: #e5e7eb; color: #666; }
+        .tab-button.active { color: white; }
+        .content { padding: 15px; display: none; }
+        .content.active { display: block; }
+        .ekle-btn { width: 100%; padding: 12px; background-color: #06b6d4; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; margin-bottom: 15px; }
+        .form { background-color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #e5e7eb; display: none; }
+        .form.active { display: block; }
+        .form input, .form textarea { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; font-family: inherit; }
+        .form textarea { min-height: 60px; resize: vertical; }
+        .gonder-btn { width: 100%; padding: 10px; background-color: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; }
+        .liste { display: flex; flex-direction: column; gap: 10px; }
+        .kart { background-color: white; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: flex-start; }
+        .kart-icerik { flex: 1; }
+        .kart-baslik { font-size: 16px; font-weight: 600; color: #1f2937; margin-bottom: 8px; }
+        .saat { font-size: 13px; color: #6b7280; margin-bottom: 5px; }
+        .not { font-size: 13px; color: #9ca3af; margin-top: 5px; font-style: italic; }
+        .sil-btn { background-color: #fee2e2; color: #dc2626; border: none; border-radius: 6px; padding: 8px 12px; cursor: pointer; font-size: 16px; }
+        .bos-mesaj { text-align: center; color: #9ca3af; padding: 30px 20px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💊 Sağlık Takip</h1>
+            <p>İlaç ve randevuları yönet</p>
+            <button id="bildirimBtn" class="bildirim-btn" onclick="bildirimIzniAl()">🔔 Bildirimleri Aç</button>
+            <p id="bildirimDurumu" class="bildirim-aktif" style="display: none;">✅ Bildirimler AÇIK</p>
+        </div>
+        <div class="tab-bar">
+            <button class="tab-button active" onclick="tabAc('ilac')">💊 İlaçlar</button>
+            <button class="tab-button" onclick="tabAc('randevu')">📅 Randevular</button>
+        </div>
+        <div id="ilac-content" class="content active">
+            <button class="ekle-btn" onclick="formAc('ilacForm')">➕ Yeni İlaç</button>
+            <form id="ilacForm" class="form" onsubmit="ilacEkle(event)">
+                <input type="text" placeholder="İlaç adı" id="ilacIsim" required>
+                <input type="time" id="ilacSaat" required>
+                <textarea placeholder="Not (opsiyonel)" id="ilacNotlar"></textarea>
+                <button type="submit" class="gonder-btn">Kaydet</button>
+            </form>
+            <div id="ilacListe" class="liste"><p class="bos-mesaj">Henüz ilaç eklenmemiş</p></div>
+        </div>
+        <div id="randevu-content" class="content">
+            <button class="ekle-btn" onclick="formAc('randevuForm')">➕ Yeni Randevu</button>
+            <form id="randevuForm" class="form" onsubmit="randevuEkle(event)">
+                <input type="text" placeholder="Doktor/Klinik adı" id="randevuDoktor" required>
+                <input type="date" id="randevuTarih" required>
+                <input type="time" id="randevuSaat" required>
+                <textarea placeholder="Not (opsiyonel)" id="randevuNotlar"></textarea>
+                <button type="submit" class="gonder-btn">Kaydet</button>
+            </form>
+            <div id="randevuListe" class="liste"><p class="bos-mesaj">Henüz randevu eklenmemiş</p></div>
+        </div>
+    </div>
+    <script>
+        let ilaclar = []; let randevular = [];
+        window.addEventListener('load', function() { yukle(); bildirimGuncelle(); hatirlaticiBaslat(); });
+        function yukle() {
+            const ilaclarStr = localStorage.getItem('ilaclar');
+            const randevularStr = localStorage.getItem('randevular');
+            if (ilaclarStr) { try { ilaclar = JSON.parse(ilaclarStr); } catch(e) { ilaclar = []; } }
+            if (randevularStr) { try { randevular = JSON.parse(randevularStr); } catch(e) { randevular = []; } }
+            ilaclarGoster(); randevularGoster();
+        }
+        function kaydet() { localStorage.setItem('ilaclar', JSON.stringify(ilaclar)); localStorage.setItem('randevular', JSON.stringify(randevular)); }
+        function formAc(formId) { const form = document.getElementById(formId); form.classList.toggle('active'); }
+        function tabAc(tab) {
+            document.querySelectorAll('.tab-button').forEach(btn => { btn.classList.remove('active'); });
+            event.target.classList.add('active');
+            if (tab === 'ilac') { event.target.style.backgroundColor = '#10b981'; event.target.style.color = 'white'; } else { event.target.style.backgroundColor = '#3b82f6'; event.target.style.color = 'white'; }
+            document.querySelectorAll('.content').forEach(c => { c.classList.remove('active'); });
+            document.getElementById(tab + '-content').classList.add('active');
+        }
+        function ilacEkle(event) {
+            event.preventDefault();
+            const isim = document.getElementById('ilacIsim').value;
+            const saat = document.getElementById('ilacSaat').value;
+            const notlar = document.getElementById('ilacNotlar').value;
+            if (!isim || !saat) { alert('İlaç adı ve saati girin!'); return; }
+            ilaclar.push({ id: Date.now(), isim: isim, saat: saat, notlar: notlar });
+            kaydet();
+            document.getElementById('ilacForm').reset();
+            document.getElementById('ilacForm').classList.remove('active');
+            ilaclarGoster();
+            bildirimGonder('İlaç eklendi!', isim + ' - ' + saat);
+        }
+        function randevuEkle(event) {
+            event.preventDefault();
+            const doktor = document.getElementById('randevuDoktor').value;
+            const tarih = document.getElementById('randevuTarih').value;
+            const saat = document.getElementById('randevuSaat').value;
+            const notlar = document.getElementById('randevuNotlar').value;
+            if (!doktor || !tarih || !saat) { alert('Tüm alanları doldurun!'); return; }
+            randevular.push({ id: Date.now(), doktor: doktor, tarih: tarih, saat: saat, notlar: notlar });
+            kaydet();
+            document.getElementById('randevuForm').reset();
+            document.getElementById('randevuForm').classList.remove('active');
+            randevularGoster();
+            const tarihObj = new Date(tarih);
+            bildirimGonder('Randevu eklendi!', doktor + ' - ' + tarihObj.toLocaleDateString('tr-TR'));
+        }
+        function ilaclarGoster() {
+            const liste = document.getElementById('ilacListe');
+            if (ilaclar.length === 0) { liste.innerHTML = '<p class="bos-mesaj">Henüz ilaç eklenmemiş</p>'; return; }
+            const siralı = ilaclar.slice().sort((a, b) => a.saat.localeCompare(b.saat));
+            let html = '';
+            siralı.forEach(ilac => {
+                html += '<div class="kart"><div class="kart-icerik"><div class="kart-baslik">💊 ' + ilac.isim + '</div><div class="saat">⏰ ' + ilac.saat + '</div>' + (ilac.notlar ? '<div class="not">' + ilac.notlar + '</div>' : '') + '</div><button class="sil-btn" onclick="ilacSil(' + ilac.id + ')">🗑️</button></div>';
+            });
+            liste.innerHTML = html;
+        }
+        function randevularGoster() {
+            const liste = document.getElementById('randevuListe');
+            if (randevular.length === 0) { liste.innerHTML = '<p class="bos-mesaj">Henüz randevu eklenmemiş</p>'; return; }
+            const siralı = randevular.slice().sort((a, b) => new Date(a.tarih) - new Date(b.tarih));
+            let html = '';
+            siralı.forEach(randevu => {
+                const tarihObj = new Date(randevu.tarih);
+                html += '<div class="kart"><div class="kart-icerik"><div class="kart-baslik">📅 ' + randevu.doktor + '</div><div class="saat">📍 ' + tarihObj.toLocaleDateString('tr-TR') + ' - ' + randevu.saat + '</div>' + (randevu.notlar ? '<div class="not">' + randevu.notlar + '</div>' : '') + '</div><button class="sil-btn" onclick="randevuSil(' + randevu.id + ')">🗑️</button></div>';
+            });
+            liste.innerHTML = html;
+        }
+        function ilacSil(id) { ilaclar = ilaclar.filter(i => i.id !== id); kaydet(); ilaclarGoster(); }
+        function randevuSil(id) { randevular = randevular.filter(r => r.id !== id); kaydet(); randevularGoster(); }
+        function bildirimIzniAl() {
+            if (!('Notification' in window)) { alert('Bu tarayıcı bildirimleri desteklemiyor!'); return; }
+            if (Notification.permission === 'granted') { testBildirim(); return; }
+            Notification.requestPermission().then(function(permission) {
+                if (permission === 'granted') { setTimeout(bildirimGuncelle, 100); setTimeout(testBildirim, 300); }
+            });
+        }
+        function bildirimGuncelle() {
+            var btn = document.getElementById('bildirimBtn');
+            var durum = document.getElementById('bildirimDurumu');
+            if ('Notification' in window && Notification.permission === 'granted') {
+                if (btn) btn.style.display = 'none';
+                if (durum) durum.style.display = 'block';
+            }
+        }
+        function testBildirim() {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('Bildirimler çalışıyor!', { body: 'Sağlık Takip uygulaması hazır.', icon: '💊' });
+            }
+        }
+        function bildirimGonder(baslik, mesaj) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(baslik, { body: mesaj, icon: '💊' });
+            }
+        }
+        function hatirlaticiBaslat() { setInterval(function() { kontrol(); }, 60000); }
+        function kontrol() {
+            const simdi = new Date();
+            const saat = String(simdi.getHours()).padStart(2, '0');
+            const dakika = String(simdi.getMinutes()).padStart(2, '0');
+            const buSaat = saat + ':' + dakika;
+            ilaclar.forEach(ilac => {
+                const [s, d] = ilac.saat.split(':');
+                const ilacSaati = new Date();
+                ilacSaati.setHours(parseInt(s), parseInt(d), 0);
+                const once = new Date(ilacSaati.getTime() - 15 * 60 * 1000);
+                const onceSaat = String(once.getHours()).padStart(2, '0');
+                const onceDakika = String(once.getMinutes()).padStart(2, '0');
+                if (buSaat === onceSaat + ':' + onceDakika) { bildirimGonder('İlaç zamanı yaklaşıyor!', ilac.isim + ' - ' + ilac.saat); }
+            });
+            randevular.forEach(randevu => {
+                const randevuTarihi = new Date(randevu.tarih);
+                const gunonce = new Date(randevuTarihi.getTime() - 24 * 60 * 60 * 1000);
+                const bugun = new Date();
+                bugun.setHours(0, 0, 0, 0);
+                if (gunonce.toDateString() === bugun.toDateString()) {
+                    const tarihObj = new Date(randevu.tarih);
+                    bildirimGonder('Yarın randevunuz var!', randevu.doktor + ' - ' + tarihObj.toLocaleDateString('tr-TR'));
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+EOF
